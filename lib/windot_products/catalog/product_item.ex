@@ -3,10 +3,10 @@ defmodule WindotProducts.Catalog.ProductItem do
   import Ecto.Changeset
 
   schema "product_items" do
-    field :quantity, :integer
+    field(:quantity, :integer)
 
-    belongs_to :material, WindotProducts.Catalog.Material
-    belongs_to :product, WindotProducts.Catalog.Product
+    belongs_to(:material, WindotProducts.Catalog.Material)
+    belongs_to(:product, WindotProducts.Catalog.Product)
 
     timestamps(type: :utc_datetime)
   end

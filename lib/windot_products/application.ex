@@ -9,7 +9,7 @@ defmodule WindotProducts.Application do
   def start(_type, _args) do
     children = [
       WindotProductsWeb.Telemetry,
-      WindotProducts.Repo,
+      WindotProducts.Catalog,
       {DNSCluster, query: Application.get_env(:windot_products, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: WindotProducts.PubSub},
       # Start a worker by calling: WindotProducts.Worker.start_link(arg)

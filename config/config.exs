@@ -12,8 +12,7 @@ config :windot_products,
 
 config :windot_products, ecto_repos: [WindotProducts.Repo]
 
-config :windot_products, WindotProducts.Repo,
-  migration_timestamps: [type: :utc_datetime]
+config :windot_products, WindotProducts.Repo, migration_timestamps: [type: :utc_datetime]
 
 # Configure the endpoint
 config :windot_products, WindotProductsWeb.Endpoint,

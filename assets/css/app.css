@@ -6,7 +6,37 @@
 @source "../js";
 @source "../../lib/windot_products_web";
 
-@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Vazirmatn:wght@400;500;600;700&display=swap");
+@font-face {
+  font-family: "WindotFont";
+  src: url("/fonts/PeydaWebFaNum-Regular.woff") format("woff");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "WindotFont";
+  src: url("/fonts/PeydaWebFaNum-Medium.woff") format("woff");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "WindotFont";
+  src: url("/fonts/PeydaWebFaNum-SemiBold.woff") format("woff");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "WindotFont";
+  src: url("/fonts/PeydaWebFaNum-Bold.woff") format("woff");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
 
 /* A Tailwind plugin that makes "hero-#{ICON}" classes available.
    The heroicons installation itself is managed by your mix.exs */
@@ -120,7 +150,7 @@
 .app-body {
   background-color: var(--neon-bg);
   color: var(--neon-text);
-  font-family: "Vazirmatn", "Space Grotesk", sans-serif;
+  font-family: "WindotFont", Tahoma, Arial, sans-serif;
   min-height: 100vh;
 }
 
@@ -220,6 +250,32 @@
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 }
 
+.neon-counter {
+  counter-reset: catalog-row;
+}
+
+.neon-row-numbered {
+  counter-increment: catalog-row;
+}
+
+.neon-index {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(183, 255, 59, 0.35);
+  color: rgba(183, 255, 59, 0.95);
+  background: rgba(183, 255, 59, 0.1);
+  font-weight: 700;
+  box-shadow: 0 0 18px rgba(183, 255, 59, 0.14);
+}
+
+.neon-index::before {
+  content: counter(catalog-row);
+}
+
 .neon-subrow {
   display: flex;
   align-items: center;
@@ -229,6 +285,39 @@
   border-radius: 0.85rem;
   border: 1px solid rgba(183, 255, 59, 0.15);
   background: rgba(5, 10, 18, 0.6);
+}
+
+.neon-check {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(79, 240, 255, 0.18);
+  background: rgba(5, 10, 18, 0.55);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.neon-check:hover {
+  border-color: rgba(183, 255, 59, 0.45);
+  background: rgba(8, 18, 30, 0.78);
+  transform: translateY(-1px);
+}
+
+.neon-checkbox {
+  width: 1.05rem;
+  height: 1.05rem;
+  accent-color: var(--neon-lime);
+}
+
+.neon-empty {
+  border: 1px dashed rgba(79, 240, 255, 0.25);
+  border-radius: 0.85rem;
+  padding: 0.85rem 1rem;
+  color: rgba(79, 240, 255, 0.72);
+  background: rgba(5, 10, 18, 0.35);
+  font-size: 0.85rem;
 }
 
 .neon-pill {
@@ -307,6 +396,25 @@
   background: rgba(255, 75, 216, 0.18);
   color: rgba(255, 75, 216, 0.9);
   box-shadow: none;
+}
+
+.neon-icon-btn {
+  width: 2.4rem;
+  height: 2.4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(79, 240, 255, 0.25);
+  background: rgba(79, 240, 255, 0.1);
+  color: rgba(79, 240, 255, 0.92);
+  transition: border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.neon-icon-btn:hover {
+  border-color: rgba(183, 255, 59, 0.55);
+  color: rgba(183, 255, 59, 0.95);
+  transform: translateY(-1px);
 }
 
 .neon-link {

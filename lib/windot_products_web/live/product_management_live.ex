@@ -13,6 +13,7 @@ defmodule WindotProductsWeb.ProductManagementLive do
       |> assign(:current_scope, nil)
       |> assign(:active_tab, :materials)
       |> assign(:editing_material_id, nil)
+      |> assign(:editing_product_id, nil)
       |> assign(:material_errors, %{})
       |> assign(:product_errors, [])
       |> assign(:product_items, [])
@@ -53,7 +54,14 @@ defmodule WindotProductsWeb.ProductManagementLive do
 
     if errors == %{} do
       _material = Catalog.upsert_material(attrs)
-      {:noreply, reset_material_form(refresh_materials(socket))}
+
+      socket =
+        socket
+        |> refresh_materials()
+        |> refresh_products()
+        |> reset_material_form()
+
+      {:noreply, socket}
     else
       {:noreply,
        socket
@@ -78,6 +86,7 @@ defmodule WindotProductsWeb.ProductManagementLive do
               |> assign(:editing_material_id, material_id)
               |> assign(:material_form, material_form(material))
               |> assign(:material_errors, %{})
+              |> push_event("scroll-to-section", %{id: "material-editor"})
 
             {:noreply, socket}
         end
@@ -106,28 +115,60 @@ defmodule WindotProductsWeb.ProductManagementLive do
     end
   end
 
+  def handle_event("material-move", %{"id" => id, "direction" => direction}, socket) do
+    with material_id when is_integer(material_id) <- parse_int(id),
+         move_direction when move_direction in [:up, :down] <- parse_direction(direction) do
+      Catalog.move_material(material_id, move_direction)
+    end
+
+    {:noreply, refresh_materials(socket)}
+  end
+
   def handle_event("item-add", %{"item" => params}, socket) do
-    material_id = parse_int(Map.get(params, "material_id"))
-    quantity = parse_int(Map.get(params, "quantity"))
+    material_ids =
+      params
+      |> Map.get("material_ids", [])
+      |> List.wrap()
+      |> Enum.map(&parse_int/1)
+      |> Enum.reject(&is_nil/1)
 
     socket =
       cond do
-        is_nil(material_id) or is_nil(quantity) or quantity <= 0 ->
-          assign(socket, :product_errors, ["لطفا متریال و مقدار معتبر وارد کنید."])
+        material_ids == [] ->
+          assign(socket, :product_errors, ["لطفا حداقل یک متریال انتخاب کنید."])
 
-        is_nil(Map.get(socket.assigns.materials_by_id, material_id)) ->
+        Enum.any?(material_ids, &is_nil(Map.get(socket.assigns.materials_by_id, &1))) ->
           assign(socket, :product_errors, ["ابتدا متریال را ثبت کنید."])
 
         true ->
-          updated_items = add_item(socket.assigns.product_items, material_id, quantity)
+          updated_items = add_items(socket.assigns.product_items, material_ids)
 
           socket
           |> assign(:product_items, updated_items)
           |> assign(:product_errors, [])
-          |> assign(:item_form, item_form(%{"material_id" => "", "quantity" => ""}))
+          |> assign(:item_form, item_form(%{}))
       end
 
     {:noreply, socket}
+  end
+
+  def handle_event("item-add", _params, socket) do
+    {:noreply, assign(socket, :product_errors, ["لطفا حداقل یک متریال انتخاب کنید."])}
+  end
+
+  def handle_event("item-quantities-change", %{"items" => params}, socket) do
+    items =
+      Enum.map(socket.assigns.product_items, fn item ->
+        quantity =
+          params
+          |> Map.get(to_string(item.material_id), %{})
+          |> Map.get("quantity")
+          |> parse_int()
+
+        Map.put(item, :quantity, quantity)
+      end)
+
+    {:noreply, assign(socket, :product_items, items)}
   end
 
   def handle_event("item-remove", %{"material_id" => id}, socket) do
@@ -141,29 +182,78 @@ defmodule WindotProductsWeb.ProductManagementLive do
     end
   end
 
+  def handle_event("product-validate", %{"product" => params}, socket) do
+    {:noreply, assign(socket, :product_form, product_form(params))}
+  end
+
   def handle_event("product-save", %{"product" => params}, socket) do
+    product_id = parse_int(Map.get(params, "id"))
     name = String.trim(Map.get(params, "name", ""))
     items = socket.assigns.product_items
 
     cond do
       name == "" ->
-        {:noreply, assign(socket, :product_errors, ["نام محصول الزامی است."])}
+        {:noreply,
+         socket
+         |> assign(:product_form, product_form(params))
+         |> assign(:product_errors, ["نام محصول الزامی است."])}
 
       items == [] ->
-        {:noreply, assign(socket, :product_errors, ["حداقل یک متریال اضافه کنید."])}
+        {:noreply,
+         socket
+         |> assign(:product_form, product_form(params))
+         |> assign(:product_errors, ["حداقل یک متریال اضافه کنید."])}
+
+      Enum.any?(items, &(is_nil(&1.quantity) or &1.quantity <= 0)) ->
+        {:noreply,
+         socket
+         |> assign(:product_form, product_form(params))
+         |> assign(:product_errors, ["برای همه متریال های انتخاب شده مقدار معتبر وارد کنید."])}
 
       true ->
-        _product = Catalog.add_product(%{name: name, items: items})
+        _product = Catalog.upsert_product(%{id: product_id, name: name, items: items})
 
         socket =
           socket
           |> refresh_products()
-          |> assign(:product_items, [])
-          |> assign(:product_form, product_form(%{}))
-          |> assign(:product_errors, [])
+          |> reset_product_form()
 
         {:noreply, socket}
     end
+  end
+
+  def handle_event("product-edit", %{"id" => id}, socket) do
+    case parse_int(id) do
+      nil ->
+        {:noreply, socket}
+
+      product_id ->
+        case Catalog.get_product(product_id) do
+          nil ->
+            {:noreply, socket}
+
+          product ->
+            items =
+              Enum.map(product.items, fn item ->
+                %{id: item.id, material_id: item.material_id, quantity: item.quantity}
+              end)
+
+            socket =
+              socket
+              |> assign(:active_tab, :products)
+              |> assign(:editing_product_id, product_id)
+              |> assign(:product_form, product_form(product))
+              |> assign(:product_items, items)
+              |> assign(:product_errors, [])
+              |> push_event("scroll-to-section", %{id: "product-editor"})
+
+            {:noreply, socket}
+        end
+    end
+  end
+
+  def handle_event("product-cancel", _params, socket) do
+    {:noreply, reset_product_form(socket)}
   end
 
   def handle_event("product-delete", %{"id" => id}, socket) do
@@ -173,8 +263,23 @@ defmodule WindotProductsWeb.ProductManagementLive do
 
       product_id ->
         :ok = Catalog.delete_product(product_id)
-        {:noreply, refresh_products(socket)}
+
+        socket =
+          socket
+          |> refresh_products()
+          |> maybe_reset_deleted_product(product_id)
+
+        {:noreply, socket}
     end
+  end
+
+  def handle_event("product-move", %{"id" => id, "direction" => direction}, socket) do
+    with product_id when is_integer(product_id) <- parse_int(id),
+         move_direction when move_direction in [:up, :down] <- parse_direction(direction) do
+      Catalog.move_product(product_id, move_direction)
+    end
+
+    {:noreply, refresh_products(socket)}
   end
 
   @impl true
@@ -185,15 +290,14 @@ defmodule WindotProductsWeb.ProductManagementLive do
         <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p class="text-sm text-emerald-200/80">مدیریت هوشمند متریال و محصولات ویندات</p>
+
             <h1 class="neon-title text-2xl sm:text-3xl">پنل مدیریت محصولات</h1>
           </div>
+
           <div class="flex items-center gap-3">
-            <div class="neon-pill">
-              <span class="text-xs">{length(@materials_list)} متریال</span>
-            </div>
-            <div class="neon-pill">
-              <span class="text-xs">{@products_count} محصول</span>
-            </div>
+            <div class="neon-pill"><span class="text-xs">{length(@materials_list)} متریال</span></div>
+
+            <div class="neon-pill"><span class="text-xs">{@products_count} محصول</span></div>
           </div>
         </div>
 
@@ -222,25 +326,56 @@ defmodule WindotProductsWeb.ProductManagementLive do
               <h2 class="text-lg font-semibold text-emerald-100">لیست متریال</h2>
               <span class="text-xs text-emerald-200/80">قیمت ها به تومان ثبت می شوند</span>
             </div>
-            <div id="materials" class="space-y-4" phx-update="stream">
+
+            <div id="materials" class="neon-counter space-y-4" phx-update="stream">
               <div
                 :for={{dom_id, material} <- @streams.materials}
                 id={dom_id}
-                class="neon-row"
+                class="neon-row neon-row-numbered"
               >
+                <div class="neon-index" aria-hidden="true"></div>
+
                 <div class="space-y-1">
                   <p class="text-sm text-emerald-200/70">نام متریال</p>
+
                   <p class="text-base font-semibold text-slate-50">{material.name}</p>
                 </div>
+
                 <div class="space-y-1">
                   <p class="text-sm text-emerald-200/70">واحد شمارش</p>
+
                   <p class="text-base text-emerald-50">{material.unit}</p>
                 </div>
+
                 <div class="space-y-1">
                   <p class="text-sm text-emerald-200/70">قیمت</p>
+
                   <p class="text-base font-semibold text-lime-200">{price_toman(material.price)}</p>
                 </div>
+
                 <div class="flex flex-wrap items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    class="neon-icon-btn"
+                    title="انتقال به بالا"
+                    aria-label="انتقال متریال به بالا"
+                    phx-click="material-move"
+                    phx-value-id={material.id}
+                    phx-value-direction="up"
+                  >
+                    <.icon name="hero-arrow-up" class="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    class="neon-icon-btn"
+                    title="انتقال به پایین"
+                    aria-label="انتقال متریال به پایین"
+                    phx-click="material-move"
+                    phx-value-id={material.id}
+                    phx-value-direction="down"
+                  >
+                    <.icon name="hero-arrow-down" class="size-4" />
+                  </button>
                   <button
                     type="button"
                     class="neon-btn neon-btn-soft"
@@ -262,11 +397,12 @@ defmodule WindotProductsWeb.ProductManagementLive do
             </div>
           </section>
 
-          <section class="neon-card">
+          <section id="material-editor" class="neon-card scroll-mt-6">
             <div class="flex items-center justify-between">
               <h2 class="text-lg font-semibold text-emerald-100">
                 {if @editing_material_id, do: "ویرایش متریال", else: "ثبت متریال جدید"}
               </h2>
+
               <button
                 :if={@editing_material_id}
                 type="button"
@@ -322,19 +458,24 @@ defmodule WindotProductsWeb.ProductManagementLive do
               <span class="text-xs text-emerald-200/80">قیمت کل از جمع متریال ها</span>
             </div>
 
-            <div id="products" class="space-y-6" phx-update="stream">
+            <div id="products" class="neon-counter space-y-6" phx-update="stream">
               <div
                 :for={{dom_id, product} <- @streams.products}
                 id={dom_id}
-                class="neon-row flex-col items-start gap-4"
+                class="neon-row neon-row-numbered flex-col items-start gap-4"
               >
+                <div class="neon-index" aria-hidden="true"></div>
+
                 <div class="flex w-full flex-wrap items-start justify-between gap-4">
                   <div>
                     <p class="text-sm text-emerald-200/70">نام محصول</p>
+
                     <p class="text-lg font-semibold text-slate-50">{product.name}</p>
                   </div>
+
                   <div class="text-right">
                     <p class="text-sm text-emerald-200/70">قیمت کل محصول</p>
+
                     <p class="text-lg font-semibold text-lime-200">
                       {price_toman(product_total(product, @materials_by_id))}
                     </p>
@@ -343,16 +484,19 @@ defmodule WindotProductsWeb.ProductManagementLive do
 
                 <div class="w-full space-y-3">
                   <p class="text-sm font-semibold text-emerald-100">متریال های مصرفی</p>
+
                   <div class="space-y-2">
                     <%= for item <- product.items do %>
                       <%= if material = Map.get(@materials_by_id, item.material_id) do %>
                         <div class="neon-subrow">
                           <div>
                             <p class="text-sm text-emerald-200/70">{material.name}</p>
+
                             <p class="text-xs text-emerald-200/60">
                               واحد: {item.quantity} {material.unit}
                             </p>
                           </div>
+
                           <p class="text-sm font-semibold text-lime-200">
                             {price_toman(material.price * item.quantity)}
                           </p>
@@ -362,7 +506,37 @@ defmodule WindotProductsWeb.ProductManagementLive do
                   </div>
                 </div>
 
-                <div class="flex w-full justify-end">
+                <div class="flex w-full flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    class="neon-icon-btn"
+                    title="انتقال به بالا"
+                    aria-label="انتقال محصول به بالا"
+                    phx-click="product-move"
+                    phx-value-id={product.id}
+                    phx-value-direction="up"
+                  >
+                    <.icon name="hero-arrow-up" class="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    class="neon-icon-btn"
+                    title="انتقال به پایین"
+                    aria-label="انتقال محصول به پایین"
+                    phx-click="product-move"
+                    phx-value-id={product.id}
+                    phx-value-direction="down"
+                  >
+                    <.icon name="hero-arrow-down" class="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    class="neon-btn neon-btn-soft"
+                    phx-click="product-edit"
+                    phx-value-id={product.id}
+                  >
+                    ویرایش محصول
+                  </button>
                   <button
                     type="button"
                     class="neon-btn neon-btn-danger"
@@ -376,10 +550,29 @@ defmodule WindotProductsWeb.ProductManagementLive do
             </div>
           </section>
 
-          <section class="neon-card">
-            <h2 class="text-lg font-semibold text-emerald-100">ساخت محصول جدید</h2>
+          <section id="product-editor" class="neon-card scroll-mt-6">
+            <div class="flex items-center justify-between">
+              <h2 class="text-lg font-semibold text-emerald-100">
+                {if @editing_product_id, do: "ویرایش محصول", else: "ساخت محصول جدید"}
+              </h2>
+              <button
+                :if={@editing_product_id}
+                type="button"
+                class="neon-link"
+                phx-click="product-cancel"
+              >
+                انصراف
+              </button>
+            </div>
             <div class="mt-6 space-y-4">
-              <.form for={@product_form} id="product-form" class="space-y-4" phx-submit="product-save">
+              <.form
+                for={@product_form}
+                id="product-form"
+                class="space-y-4"
+                phx-change="product-validate"
+                phx-submit="product-save"
+              >
+                <.input type="hidden" field={@product_form[:id]} />
                 <.input
                   field={@product_form[:name]}
                   label="نام محصول"
@@ -387,35 +580,46 @@ defmodule WindotProductsWeb.ProductManagementLive do
                   error_class="neon-input-error"
                 />
               </.form>
-
               <div class="neon-divider" />
-
               <div class="space-y-3">
                 <p class="text-sm font-semibold text-emerald-100">افزودن متریال به محصول</p>
+
                 <.form
                   for={@item_form}
                   id="item-form"
                   phx-submit="item-add"
-                  class="grid gap-3 sm:grid-cols-[1.3fr,0.7fr,auto]"
+                  class="space-y-4"
                 >
-                  <.input
-                    field={@item_form[:material_id]}
-                    type="select"
-                    label="متریال"
-                    options={material_options(@materials_list)}
-                    prompt="انتخاب متریال"
-                    class="neon-input"
-                    error_class="neon-input-error"
-                  />
-                  <.input
-                    field={@item_form[:quantity]}
-                    type="number"
-                    label="مقدار مصرف"
-                    class="neon-input"
-                    error_class="neon-input-error"
-                    min="1"
-                  />
-                  <button type="submit" class="neon-btn mt-6 sm:mt-7">افزودن</button>
+                  <div class="grid gap-3 sm:grid-cols-2">
+                    <label
+                      :for={material <- available_materials(@materials_list, @product_items)}
+                      for={"material-option-#{material.id}"}
+                      class="neon-check"
+                    >
+                      <input
+                        type="checkbox"
+                        id={"material-option-#{material.id}"}
+                        name="item[material_ids][]"
+                        value={material.id}
+                        class="neon-checkbox"
+                      />
+                      <span>
+                        <span class="block text-sm font-semibold text-slate-50">{material.name}</span>
+                        <span class="block text-xs text-emerald-200/60">
+                          {material.unit} - {price_toman(material.price)}
+                        </span>
+                      </span>
+                    </label>
+
+                    <div
+                      :if={available_materials(@materials_list, @product_items) == []}
+                      class="neon-empty"
+                    >
+                      همه متریال ها به لیست محصول اضافه شده اند.
+                    </div>
+                  </div>
+
+                  <button type="submit" class="neon-btn w-full">افزودن متریال های انتخاب شده</button>
                 </.form>
               </div>
 
@@ -427,32 +631,57 @@ defmodule WindotProductsWeb.ProductManagementLive do
 
               <div class="space-y-3">
                 <p class="text-sm font-semibold text-emerald-100">متریال های انتخاب شده</p>
-                <div class="space-y-2">
-                  <div
-                    :for={item <- @product_items}
-                    class="neon-subrow"
-                  >
-                    <div>
-                      <p class="text-sm text-emerald-200/70">
+
+                <.form
+                  :if={@product_items != []}
+                  for={to_form(%{}, as: "quantities")}
+                  id="item-quantities-form"
+                  phx-change="item-quantities-change"
+                  class="space-y-2"
+                >
+                  <div :for={item <- @product_items} class="neon-subrow">
+                    <div class="min-w-0">
+                      <p class="text-sm font-semibold text-emerald-100">
                         {material_name(item.material_id, @materials_by_id)}
                       </p>
+
                       <p class="text-xs text-emerald-200/60">
-                        مقدار: {item.quantity}
+                        واحد: {material_unit(item.material_id, @materials_by_id)}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      class="neon-link"
-                      phx-click="item-remove"
-                      phx-value-material_id={item.material_id}
-                    >
-                      حذف
-                    </button>
+
+                    <div class="flex w-full items-end gap-3 sm:w-auto">
+                      <.input
+                        type="number"
+                        id={"item-quantity-#{item.material_id}"}
+                        name={"items[#{item.material_id}][quantity]"}
+                        value={item.quantity || ""}
+                        label="مقدار"
+                        class="neon-input min-w-28"
+                        error_class="neon-input-error"
+                        min="1"
+                      />
+
+                      <button
+                        type="button"
+                        class="neon-link pb-3"
+                        phx-click="item-remove"
+                        phx-value-material_id={item.material_id}
+                      >
+                        حذف
+                      </button>
+                    </div>
                   </div>
+                </.form>
+
+                <div :if={@product_items == []} class="neon-empty">
+                  هنوز متریالی برای این محصول انتخاب نشده است.
                 </div>
               </div>
 
-              <button type="submit" form="product-form" class="neon-btn w-full">ثبت محصول</button>
+              <button type="submit" form="product-form" class="neon-btn w-full">
+                {if @editing_product_id, do: "ذخیره تغییرات محصول", else: "ثبت محصول"}
+              </button>
             </div>
           </section>
         </div>
@@ -513,31 +742,46 @@ defmodule WindotProductsWeb.ProductManagementLive do
 
   defp stringify_keys(map) do
     map
+    |> normalize_form_values()
     |> Enum.map(fn {key, value} -> {to_string(key), value} end)
     |> Enum.into(%{})
   end
 
-  defp material_options(materials) do
-    Enum.map(materials, fn material ->
-      {material.name, material.id}
-    end)
+  defp normalize_form_values(%_struct{} = struct) do
+    struct
+    |> Map.from_struct()
+    |> Map.drop([:__meta__, :product_items, :items, :material, :product])
   end
 
-  defp add_item(items, material_id, quantity) do
-    case Enum.find(items, &(&1.material_id == material_id)) do
-      nil ->
-        items ++ [%{material_id: material_id, quantity: quantity}]
+  defp normalize_form_values(map), do: map
 
-      existing ->
-        updated = %{existing | quantity: existing.quantity + quantity}
-        Enum.map(items, fn item -> if item.material_id == material_id, do: updated, else: item end)
-    end
+  defp available_materials(materials, items) do
+    selected_ids = MapSet.new(items, & &1.material_id)
+    Enum.reject(materials, &MapSet.member?(selected_ids, &1.id))
+  end
+
+  defp add_items(items, material_ids) do
+    selected_ids = MapSet.new(items, & &1.material_id)
+
+    new_items =
+      material_ids
+      |> Enum.reject(&MapSet.member?(selected_ids, &1))
+      |> Enum.map(&%{material_id: &1, quantity: nil})
+
+    items ++ new_items
   end
 
   defp material_name(material_id, materials_by_id) do
     case Map.get(materials_by_id, material_id) do
       nil -> "متریال حذف شده"
       material -> material.name
+    end
+  end
+
+  defp material_unit(material_id, materials_by_id) do
+    case Map.get(materials_by_id, material_id) do
+      nil -> "-"
+      material -> material.unit
     end
   end
 
@@ -572,6 +816,10 @@ defmodule WindotProductsWeb.ProductManagementLive do
     end
   end
 
+  defp parse_direction("up"), do: :up
+  defp parse_direction("down"), do: :down
+  defp parse_direction(_direction), do: nil
+
   defp refresh_materials(socket) do
     materials = Catalog.list_materials()
 
@@ -594,6 +842,23 @@ defmodule WindotProductsWeb.ProductManagementLive do
     |> assign(:editing_material_id, nil)
     |> assign(:material_form, material_form(%{}))
     |> assign(:material_errors, %{})
+  end
+
+  defp reset_product_form(socket) do
+    socket
+    |> assign(:editing_product_id, nil)
+    |> assign(:product_items, [])
+    |> assign(:product_form, product_form(%{}))
+    |> assign(:item_form, item_form(%{}))
+    |> assign(:product_errors, [])
+  end
+
+  defp maybe_reset_deleted_product(socket, product_id) do
+    if socket.assigns.editing_product_id == product_id do
+      reset_product_form(socket)
+    else
+      socket
+    end
   end
 
   defp drop_missing_items(socket) do
