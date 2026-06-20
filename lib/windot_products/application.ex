@@ -8,6 +8,7 @@ defmodule WindotProducts.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      WindotProducts.Repo,
       WindotProductsWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:windot_products, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: WindotProducts.PubSub},
