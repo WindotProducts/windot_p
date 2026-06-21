@@ -31,6 +31,7 @@ defmodule WindotProductsWeb.Layouts do
     default: nil,
     doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
 
+  slot :header_badge
   slot :inner_block, required: true
 
   def app(assigns) do
@@ -41,7 +42,13 @@ defmodule WindotProductsWeb.Layouts do
           <p class="app-kicker">مدیریت محصولات ویندات</p>
           <h1 class="app-heading">پنل کنترل متریال و قیمت گذاری</h1>
         </div>
-        <div class="app-badge">به روز رسانی زنده</div>
+        <div class="app-badge">
+          <%= if @header_badge != [] do %>
+            {render_slot(@header_badge)}
+          <% else %>
+            به روز رسانی زنده
+          <% end %>
+        </div>
       </header>
 
       <main class="app-main">

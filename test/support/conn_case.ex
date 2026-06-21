@@ -31,14 +31,10 @@ defmodule WindotProductsWeb.ConnCase do
     end
   end
 
-  setup _tags do
-    if Process.whereis(WindotProducts.Catalog) do
-      :ok
-    else
-      start_supervised!(WindotProducts.Catalog)
-    end
+  setup tags do
+    pid = Ecto.Adapters.SQL.Sandbox.start_owner!(WindotProducts.Repo, shared: not tags[:async])
+    on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
 
-    WindotProducts.Catalog.reset_seed()
     {:ok, conn: Phoenix.ConnTest.build_conn()}
   end
 end

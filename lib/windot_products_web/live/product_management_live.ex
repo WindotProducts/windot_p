@@ -14,6 +14,10 @@ defmodule WindotProductsWeb.ProductManagementLive do
       |> assign(:active_tab, :materials)
       |> assign(:editing_material_id, nil)
       |> assign(:editing_product_id, nil)
+      |> assign(:material_modal_open, false)
+      |> assign(:product_modal_open, false)
+      |> assign(:material_search, "")
+      |> assign(:product_search, "")
       |> assign(:material_errors, %{})
       |> assign(:product_errors, [])
       |> assign(:product_items, [])
@@ -35,8 +39,31 @@ defmodule WindotProductsWeb.ProductManagementLive do
       |> refresh_materials()
       |> refresh_products()
       |> assign(:active_tab, active_tab)
+      |> assign(:material_modal_open, false)
+      |> assign(:product_modal_open, false)
 
     {:noreply, socket}
+  end
+
+  def handle_event("material-search", %{"search" => %{"q" => query}}, socket) do
+    {:noreply,
+     socket
+     |> assign(:material_search, query)
+     |> refresh_materials()}
+  end
+
+  def handle_event("product-search", %{"search" => %{"q" => query}}, socket) do
+    {:noreply,
+     socket
+     |> assign(:product_search, query)
+     |> refresh_products()}
+  end
+
+  def handle_event("material-new", _params, socket) do
+    {:noreply,
+     socket
+     |> reset_material_form()
+     |> assign(:material_modal_open, true)}
   end
 
   def handle_event("material-validate", %{"material" => params}, socket) do
@@ -84,9 +111,9 @@ defmodule WindotProductsWeb.ProductManagementLive do
             socket =
               socket
               |> assign(:editing_material_id, material_id)
+              |> assign(:material_modal_open, true)
               |> assign(:material_form, material_form(material))
               |> assign(:material_errors, %{})
-              |> push_event("scroll-to-section", %{id: "material-editor"})
 
             {:noreply, socket}
         end
@@ -163,7 +190,7 @@ defmodule WindotProductsWeb.ProductManagementLive do
           params
           |> Map.get(to_string(item.material_id), %{})
           |> Map.get("quantity")
-          |> parse_int()
+          |> parse_quantity()
 
         Map.put(item, :quantity, quantity)
       end)
@@ -186,9 +213,17 @@ defmodule WindotProductsWeb.ProductManagementLive do
     {:noreply, assign(socket, :product_form, product_form(params))}
   end
 
+  def handle_event("product-new", _params, socket) do
+    {:noreply,
+     socket
+     |> reset_product_form()
+     |> assign(:product_modal_open, true)}
+  end
+
   def handle_event("product-save", %{"product" => params}, socket) do
     product_id = parse_int(Map.get(params, "id"))
     name = String.trim(Map.get(params, "name", ""))
+    profit = parse_int(Map.get(params, "profit"))
     items = socket.assigns.product_items
 
     cond do
@@ -197,6 +232,12 @@ defmodule WindotProductsWeb.ProductManagementLive do
          socket
          |> assign(:product_form, product_form(params))
          |> assign(:product_errors, ["نام محصول الزامی است."])}
+
+      is_nil(profit) or profit < 0 ->
+        {:noreply,
+         socket
+         |> assign(:product_form, product_form(params))
+         |> assign(:product_errors, ["مبلغ سود باید عدد معتبر باشد."])}
 
       items == [] ->
         {:noreply,
@@ -211,7 +252,8 @@ defmodule WindotProductsWeb.ProductManagementLive do
          |> assign(:product_errors, ["برای همه متریال های انتخاب شده مقدار معتبر وارد کنید."])}
 
       true ->
-        _product = Catalog.upsert_product(%{id: product_id, name: name, items: items})
+        _product =
+          Catalog.upsert_product(%{id: product_id, name: name, profit: profit, items: items})
 
         socket =
           socket
@@ -245,7 +287,7 @@ defmodule WindotProductsWeb.ProductManagementLive do
               |> assign(:product_form, product_form(product))
               |> assign(:product_items, items)
               |> assign(:product_errors, [])
-              |> push_event("scroll-to-section", %{id: "product-editor"})
+              |> assign(:product_modal_open, true)
 
             {:noreply, socket}
         end
@@ -286,21 +328,12 @@ defmodule WindotProductsWeb.ProductManagementLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
-      <div class="space-y-8">
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p class="text-sm text-emerald-200/80">مدیریت هوشمند متریال و محصولات ویندات</p>
+      <:header_badge>
+        <span>{@products_count} محصول</span>
+        <span>{length(@materials_list)} متریال</span>
+      </:header_badge>
 
-            <h1 class="neon-title text-2xl sm:text-3xl">پنل مدیریت محصولات</h1>
-          </div>
-
-          <div class="flex items-center gap-3">
-            <div class="neon-pill"><span class="text-xs">{length(@materials_list)} متریال</span></div>
-
-            <div class="neon-pill"><span class="text-xs">{@products_count} محصول</span></div>
-          </div>
-        </div>
-
+      <div class="space-y-4">
         <div class="flex flex-wrap gap-3">
           <button
             type="button"
@@ -320,14 +353,29 @@ defmodule WindotProductsWeb.ProductManagementLive do
           </button>
         </div>
 
-        <div :if={@active_tab == :materials} class="grid gap-8 lg:grid-cols-[1.1fr,0.9fr]">
-          <section class="neon-card space-y-6">
+        <div :if={@active_tab == :materials} class="grid gap-3">
+          <section class="neon-card space-y-3">
             <div class="flex items-center justify-between">
               <h2 class="text-lg font-semibold text-emerald-100">لیست متریال</h2>
               <span class="text-xs text-emerald-200/80">قیمت ها به تومان ثبت می شوند</span>
             </div>
 
-            <div id="materials" class="neon-counter space-y-4" phx-update="stream">
+            <.form
+              for={to_form(%{"q" => @material_search}, as: "search")}
+              id="material-search-form"
+              phx-change="material-search"
+            >
+              <.input
+                type="search"
+                name="search[q]"
+                value={@material_search}
+                label="جستجو بر اساس نام متریال"
+                class="neon-input"
+                phx-debounce="250"
+              />
+            </.form>
+
+            <div id="materials" class="neon-counter space-y-1.5" phx-update="stream">
               <div
                 :for={{dom_id, material} <- @streams.materials}
                 id={dom_id}
@@ -353,338 +401,378 @@ defmodule WindotProductsWeb.ProductManagementLive do
                   <p class="text-base font-semibold text-lime-200">{price_toman(material.price)}</p>
                 </div>
 
-                <div class="flex flex-wrap items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    class="neon-icon-btn"
-                    title="انتقال به بالا"
-                    aria-label="انتقال متریال به بالا"
-                    phx-click="material-move"
-                    phx-value-id={material.id}
-                    phx-value-direction="up"
-                  >
-                    <.icon name="hero-arrow-up" class="size-4" />
-                  </button>
-                  <button
-                    type="button"
-                    class="neon-icon-btn"
-                    title="انتقال به پایین"
-                    aria-label="انتقال متریال به پایین"
-                    phx-click="material-move"
-                    phx-value-id={material.id}
-                    phx-value-direction="down"
-                  >
-                    <.icon name="hero-arrow-down" class="size-4" />
-                  </button>
-                  <button
-                    type="button"
-                    class="neon-btn neon-btn-soft"
-                    phx-click="material-edit"
-                    phx-value-id={material.id}
-                  >
-                    ویرایش
-                  </button>
-                  <button
-                    type="button"
-                    class="neon-btn neon-btn-danger"
-                    phx-click="material-delete"
-                    phx-value-id={material.id}
-                  >
-                    حذف
-                  </button>
+                <div class="neon-row-actions">
+                  <div class="neon-row-actions-group">
+                    <button
+                      type="button"
+                      class="neon-icon-btn"
+                      title="انتقال به بالا"
+                      aria-label="انتقال متریال به بالا"
+                      phx-click="material-move"
+                      phx-value-id={material.id}
+                      phx-value-direction="up"
+                    >
+                      <.icon name="hero-arrow-up" class="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      class="neon-icon-btn"
+                      title="انتقال به پایین"
+                      aria-label="انتقال متریال به پایین"
+                      phx-click="material-move"
+                      phx-value-id={material.id}
+                      phx-value-direction="down"
+                    >
+                      <.icon name="hero-arrow-down" class="size-4" />
+                    </button>
+                  </div>
+
+                  <div class="neon-row-actions-group">
+                    <button
+                      type="button"
+                      class="neon-btn neon-btn-soft"
+                      phx-click="material-edit"
+                      phx-value-id={material.id}
+                    >
+                      ویرایش
+                    </button>
+                    <button
+                      type="button"
+                      class="neon-btn neon-btn-danger"
+                      phx-click="material-delete"
+                      phx-value-id={material.id}
+                    >
+                      حذف
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           </section>
 
-          <section id="material-editor" class="neon-card scroll-mt-6">
-            <div class="flex items-center justify-between">
-              <h2 class="text-lg font-semibold text-emerald-100">
-                {if @editing_material_id, do: "ویرایش متریال", else: "ثبت متریال جدید"}
-              </h2>
+          <div :if={@material_modal_open} id="material-modal" class="neon-modal-backdrop">
+            <section id="material-editor" class="neon-modal-panel">
+              <div class="flex items-center justify-between">
+                <h2 class="text-lg font-semibold text-emerald-100">
+                  {if @editing_material_id, do: "ویرایش متریال", else: "ثبت متریال جدید"}
+                </h2>
 
-              <button
-                :if={@editing_material_id}
-                type="button"
-                class="neon-link"
-                phx-click="material-cancel"
-              >
-                انصراف
-              </button>
-            </div>
-
-            <.form
-              for={@material_form}
-              id="material-form"
-              class="mt-6 space-y-4"
-              phx-change="material-validate"
-              phx-submit="material-save"
-            >
-              <.input type="hidden" field={@material_form[:id]} />
-              <.input
-                field={@material_form[:name]}
-                label="نام متریال"
-                errors={Map.get(@material_errors, :name, [])}
-                class="neon-input"
-                error_class="neon-input-error"
-              />
-              <.input
-                field={@material_form[:unit]}
-                label="واحد شمارش"
-                errors={Map.get(@material_errors, :unit, [])}
-                class="neon-input"
-                error_class="neon-input-error"
-              />
-              <.input
-                field={@material_form[:price]}
-                type="number"
-                label="قیمت هر واحد (تومان)"
-                errors={Map.get(@material_errors, :price, [])}
-                class="neon-input"
-                error_class="neon-input-error"
-                min="0"
-              />
-              <button type="submit" class="neon-btn w-full">
-                {if @editing_material_id, do: "ذخیره تغییرات", else: "ثبت متریال"}
-              </button>
-            </.form>
-          </section>
-        </div>
-
-        <div :if={@active_tab == :products} class="grid gap-8 lg:grid-cols-[1.1fr,0.9fr]">
-          <section class="neon-card space-y-6">
-            <div class="flex items-center justify-between">
-              <h2 class="text-lg font-semibold text-emerald-100">لیست محصولات</h2>
-              <span class="text-xs text-emerald-200/80">قیمت کل از جمع متریال ها</span>
-            </div>
-
-            <div id="products" class="neon-counter space-y-6" phx-update="stream">
-              <div
-                :for={{dom_id, product} <- @streams.products}
-                id={dom_id}
-                class="neon-row neon-row-numbered flex-col items-start gap-4"
-              >
-                <div class="neon-index" aria-hidden="true"></div>
-
-                <div class="flex w-full flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <p class="text-sm text-emerald-200/70">نام محصول</p>
-
-                    <p class="text-lg font-semibold text-slate-50">{product.name}</p>
-                  </div>
-
-                  <div class="text-right">
-                    <p class="text-sm text-emerald-200/70">قیمت کل محصول</p>
-
-                    <p class="text-lg font-semibold text-lime-200">
-                      {price_toman(product_total(product, @materials_by_id))}
-                    </p>
-                  </div>
-                </div>
-
-                <div class="w-full space-y-3">
-                  <p class="text-sm font-semibold text-emerald-100">متریال های مصرفی</p>
-
-                  <div class="space-y-2">
-                    <%= for item <- product.items do %>
-                      <%= if material = Map.get(@materials_by_id, item.material_id) do %>
-                        <div class="neon-subrow">
-                          <div>
-                            <p class="text-sm text-emerald-200/70">{material.name}</p>
-
-                            <p class="text-xs text-emerald-200/60">
-                              واحد: {item.quantity} {material.unit}
-                            </p>
-                          </div>
-
-                          <p class="text-sm font-semibold text-lime-200">
-                            {price_toman(material.price * item.quantity)}
-                          </p>
-                        </div>
-                      <% end %>
-                    <% end %>
-                  </div>
-                </div>
-
-                <div class="flex w-full flex-wrap justify-end gap-2">
-                  <button
-                    type="button"
-                    class="neon-icon-btn"
-                    title="انتقال به بالا"
-                    aria-label="انتقال محصول به بالا"
-                    phx-click="product-move"
-                    phx-value-id={product.id}
-                    phx-value-direction="up"
-                  >
-                    <.icon name="hero-arrow-up" class="size-4" />
-                  </button>
-                  <button
-                    type="button"
-                    class="neon-icon-btn"
-                    title="انتقال به پایین"
-                    aria-label="انتقال محصول به پایین"
-                    phx-click="product-move"
-                    phx-value-id={product.id}
-                    phx-value-direction="down"
-                  >
-                    <.icon name="hero-arrow-down" class="size-4" />
-                  </button>
-                  <button
-                    type="button"
-                    class="neon-btn neon-btn-soft"
-                    phx-click="product-edit"
-                    phx-value-id={product.id}
-                  >
-                    ویرایش محصول
-                  </button>
-                  <button
-                    type="button"
-                    class="neon-btn neon-btn-danger"
-                    phx-click="product-delete"
-                    phx-value-id={product.id}
-                  >
-                    حذف محصول
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  class="neon-link"
+                  phx-click="material-cancel"
+                >
+                  انصراف
+                </button>
               </div>
-            </div>
-          </section>
 
-          <section id="product-editor" class="neon-card scroll-mt-6">
-            <div class="flex items-center justify-between">
-              <h2 class="text-lg font-semibold text-emerald-100">
-                {if @editing_product_id, do: "ویرایش محصول", else: "ساخت محصول جدید"}
-              </h2>
-              <button
-                :if={@editing_product_id}
-                type="button"
-                class="neon-link"
-                phx-click="product-cancel"
-              >
-                انصراف
-              </button>
-            </div>
-            <div class="mt-6 space-y-4">
               <.form
-                for={@product_form}
-                id="product-form"
-                class="space-y-4"
-                phx-change="product-validate"
-                phx-submit="product-save"
+                for={@material_form}
+                id="material-form"
+                class="mt-4 space-y-3"
+                phx-change="material-validate"
+                phx-submit="material-save"
               >
-                <.input type="hidden" field={@product_form[:id]} />
+                <.input type="hidden" field={@material_form[:id]} />
                 <.input
-                  field={@product_form[:name]}
-                  label="نام محصول"
+                  field={@material_form[:name]}
+                  label="نام متریال"
+                  errors={Map.get(@material_errors, :name, [])}
                   class="neon-input"
                   error_class="neon-input-error"
                 />
+                <.input
+                  field={@material_form[:unit]}
+                  label="واحد شمارش"
+                  errors={Map.get(@material_errors, :unit, [])}
+                  class="neon-input"
+                  error_class="neon-input-error"
+                />
+                <.input
+                  field={@material_form[:price]}
+                  type="number"
+                  label="قیمت هر واحد (تومان)"
+                  errors={Map.get(@material_errors, :price, [])}
+                  class="neon-input"
+                  error_class="neon-input-error"
+                  min="0"
+                />
+                <button type="submit" class="neon-btn w-full">
+                  {if @editing_material_id, do: "ذخیره تغییرات", else: "ثبت متریال"}
+                </button>
               </.form>
-              <div class="neon-divider" />
-              <div class="space-y-3">
-                <p class="text-sm font-semibold text-emerald-100">افزودن متریال به محصول</p>
+            </section>
+          </div>
+        </div>
 
-                <.form
-                  for={@item_form}
-                  id="item-form"
-                  phx-submit="item-add"
-                  class="space-y-4"
-                >
-                  <div class="grid gap-3 sm:grid-cols-2">
-                    <label
-                      :for={material <- available_materials(@materials_list, @product_items)}
-                      for={"material-option-#{material.id}"}
-                      class="neon-check"
-                    >
-                      <input
-                        type="checkbox"
-                        id={"material-option-#{material.id}"}
-                        name="item[material_ids][]"
-                        value={material.id}
-                        class="neon-checkbox"
-                      />
-                      <span>
-                        <span class="block text-sm font-semibold text-slate-50">{material.name}</span>
-                        <span class="block text-xs text-emerald-200/60">
-                          {material.unit} - {price_toman(material.price)}
-                        </span>
-                      </span>
-                    </label>
+        <div :if={@active_tab == :products} class="grid gap-3">
+          <section class="neon-card space-y-3">
+            <div class="flex items-center justify-between">
+              <h2 class="text-lg font-semibold text-emerald-100">لیست محصولات</h2>
+              <span class="text-xs text-emerald-200/80">قیمت کل از جمع متریال ها و سود</span>
+            </div>
 
-                    <div
-                      :if={available_materials(@materials_list, @product_items) == []}
-                      class="neon-empty"
+            <.form
+              for={to_form(%{"q" => @product_search}, as: "search")}
+              id="product-search-form"
+              phx-change="product-search"
+            >
+              <.input
+                type="search"
+                name="search[q]"
+                value={@product_search}
+                label="جستجو بر اساس نام محصول"
+                class="neon-input"
+                phx-debounce="250"
+              />
+            </.form>
+
+            <div id="products" class="neon-counter space-y-2" phx-update="stream">
+              <div
+                :for={{dom_id, product} <- @streams.products}
+                id={dom_id}
+                class="neon-row neon-row-numbered items-start gap-2"
+              >
+                <div class="neon-index" aria-hidden="true"></div>
+
+                <div class="space-y-1">
+                  <p class="text-sm text-emerald-200/70">نام محصول</p>
+
+                  <p class="text-base font-semibold text-slate-50">{product.name}</p>
+                </div>
+
+                <div class="space-y-1">
+                  <p class="text-sm text-emerald-200/70">سود</p>
+
+                  <p class="text-base text-emerald-50">{price_toman(product_profit(product))}</p>
+                </div>
+
+                <div class="space-y-1">
+                  <p class="text-sm text-emerald-200/70">قیمت کل</p>
+
+                  <p class="text-base font-semibold text-lime-200">
+                    {price_toman(product_total(product, @materials_by_id))}
+                  </p>
+                </div>
+
+                <div class="neon-row-actions">
+                  <div class="neon-row-actions-group">
+                    <button
+                      type="button"
+                      class="neon-icon-btn"
+                      title="انتقال به بالا"
+                      aria-label="انتقال محصول به بالا"
+                      phx-click="product-move"
+                      phx-value-id={product.id}
+                      phx-value-direction="up"
                     >
-                      همه متریال ها به لیست محصول اضافه شده اند.
-                    </div>
+                      <.icon name="hero-arrow-up" class="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      class="neon-icon-btn"
+                      title="انتقال به پایین"
+                      aria-label="انتقال محصول به پایین"
+                      phx-click="product-move"
+                      phx-value-id={product.id}
+                      phx-value-direction="down"
+                    >
+                      <.icon name="hero-arrow-down" class="size-4" />
+                    </button>
                   </div>
 
-                  <button type="submit" class="neon-btn w-full">افزودن متریال های انتخاب شده</button>
-                </.form>
-              </div>
-
-              <div :if={@product_errors != []} class="neon-alert">
-                <%= for message <- @product_errors do %>
-                  <p>{message}</p>
-                <% end %>
-              </div>
-
-              <div class="space-y-3">
-                <p class="text-sm font-semibold text-emerald-100">متریال های انتخاب شده</p>
-
-                <.form
-                  :if={@product_items != []}
-                  for={to_form(%{}, as: "quantities")}
-                  id="item-quantities-form"
-                  phx-change="item-quantities-change"
-                  class="space-y-2"
-                >
-                  <div :for={item <- @product_items} class="neon-subrow">
-                    <div class="min-w-0">
-                      <p class="text-sm font-semibold text-emerald-100">
-                        {material_name(item.material_id, @materials_by_id)}
-                      </p>
-
-                      <p class="text-xs text-emerald-200/60">
-                        واحد: {material_unit(item.material_id, @materials_by_id)}
-                      </p>
-                    </div>
-
-                    <div class="flex w-full items-end gap-3 sm:w-auto">
-                      <.input
-                        type="number"
-                        id={"item-quantity-#{item.material_id}"}
-                        name={"items[#{item.material_id}][quantity]"}
-                        value={item.quantity || ""}
-                        label="مقدار"
-                        class="neon-input min-w-28"
-                        error_class="neon-input-error"
-                        min="1"
-                      />
-
-                      <button
-                        type="button"
-                        class="neon-link pb-3"
-                        phx-click="item-remove"
-                        phx-value-material_id={item.material_id}
-                      >
-                        حذف
-                      </button>
-                    </div>
+                  <div class="neon-row-actions-group">
+                    <button
+                      type="button"
+                      class="neon-btn neon-btn-soft"
+                      phx-click="product-edit"
+                      phx-value-id={product.id}
+                    >
+                      ویرایش
+                    </button>
+                    <button
+                      type="button"
+                      class="neon-btn neon-btn-danger"
+                      phx-click="product-delete"
+                      phx-value-id={product.id}
+                    >
+                      حذف
+                    </button>
                   </div>
-                </.form>
-
-                <div :if={@product_items == []} class="neon-empty">
-                  هنوز متریالی برای این محصول انتخاب نشده است.
                 </div>
               </div>
-
-              <button type="submit" form="product-form" class="neon-btn w-full">
-                {if @editing_product_id, do: "ذخیره تغییرات محصول", else: "ثبت محصول"}
-              </button>
             </div>
           </section>
+
+          <div :if={@product_modal_open} id="product-modal" class="neon-modal-backdrop">
+            <section id="product-editor" class="neon-modal-panel">
+              <div class="flex items-center justify-between">
+                <h2 class="text-lg font-semibold text-emerald-100">
+                  {if @editing_product_id, do: "ویرایش محصول", else: "ساخت محصول جدید"}
+                </h2>
+                <button
+                  type="button"
+                  class="neon-link"
+                  phx-click="product-cancel"
+                >
+                  انصراف
+                </button>
+              </div>
+              <div class="mt-3 space-y-2.5">
+                <.form
+                  for={@product_form}
+                  id="product-form"
+                  class="space-y-2.5"
+                  phx-change="product-validate"
+                  phx-submit="product-save"
+                >
+                  <.input type="hidden" field={@product_form[:id]} />
+                  <.input
+                    field={@product_form[:name]}
+                    label="نام محصول"
+                    class="neon-input"
+                    error_class="neon-input-error"
+                  />
+                  <.input
+                    field={@product_form[:profit]}
+                    type="number"
+                    label="سود محصول (تومان)"
+                    class="neon-input"
+                    error_class="neon-input-error"
+                    min="0"
+                  />
+                </.form>
+                <div class="neon-divider" />
+                <div class="space-y-2">
+                  <p class="text-sm font-semibold text-emerald-100">افزودن متریال به محصول</p>
+
+                  <.form
+                    for={@item_form}
+                    id="item-form"
+                    phx-submit="item-add"
+                    class="space-y-2.5"
+                  >
+                    <div class="grid gap-2 sm:grid-cols-2">
+                      <label
+                        :for={material <- available_materials(@materials_list, @product_items)}
+                        for={"material-option-#{material.id}"}
+                        class="neon-check"
+                      >
+                        <input
+                          type="checkbox"
+                          id={"material-option-#{material.id}"}
+                          name="item[material_ids][]"
+                          value={material.id}
+                          class="neon-checkbox"
+                        />
+                        <span>
+                          <span class="block text-sm font-semibold text-slate-50">
+                            {material.name}
+                          </span>
+                          <span class="block text-xs text-emerald-200/60">
+                            {material.unit} - {price_toman(material.price)}
+                          </span>
+                        </span>
+                      </label>
+
+                      <div
+                        :if={available_materials(@materials_list, @product_items) == []}
+                        class="neon-empty"
+                      >
+                        همه متریال ها به لیست محصول اضافه شده اند.
+                      </div>
+                    </div>
+
+                    <button type="submit" class="neon-btn w-full">
+                      افزودن متریال های انتخاب شده
+                    </button>
+                  </.form>
+                </div>
+
+                <div :if={@product_errors != []} class="neon-alert">
+                  <%= for message <- @product_errors do %>
+                    <p>{message}</p>
+                  <% end %>
+                </div>
+
+                <div class="space-y-2">
+                  <p class="text-sm font-semibold text-emerald-100">متریال های انتخاب شده</p>
+
+                  <.form
+                    :if={@product_items != []}
+                    for={to_form(%{}, as: "quantities")}
+                    id="item-quantities-form"
+                    phx-change="item-quantities-change"
+                    class="space-y-2"
+                  >
+                    <div :for={item <- @product_items} class="neon-subrow">
+                      <div class="min-w-0">
+                        <p class="text-sm font-semibold text-emerald-100">
+                          {material_name(item.material_id, @materials_by_id)}
+                        </p>
+
+                        <p class="text-xs text-emerald-200/60">
+                          واحد: {material_unit(item.material_id, @materials_by_id)}
+                        </p>
+                      </div>
+
+                      <div class="flex w-full items-end gap-3 sm:w-auto">
+                        <.input
+                          type="number"
+                          id={"item-quantity-#{item.material_id}"}
+                          name={"items[#{item.material_id}][quantity]"}
+                          value={item.quantity || ""}
+                          label="مقدار"
+                          class="neon-input min-w-28"
+                          error_class="neon-input-error"
+                          min="0.01"
+                          step="0.01"
+                        />
+
+                        <button
+                          type="button"
+                          class="neon-link pb-3"
+                          phx-click="item-remove"
+                          phx-value-material_id={item.material_id}
+                        >
+                          حذف
+                        </button>
+                      </div>
+                    </div>
+                  </.form>
+
+                  <div :if={@product_items == []} class="neon-empty">
+                    هنوز متریالی برای این محصول انتخاب نشده است.
+                  </div>
+                </div>
+
+                <button type="submit" form="product-form" class="neon-btn w-full">
+                  {if @editing_product_id, do: "ذخیره تغییرات محصول", else: "ثبت محصول"}
+                </button>
+              </div>
+            </section>
+          </div>
         </div>
+
+        <button
+          :if={@active_tab == :materials and not @material_modal_open}
+          type="button"
+          id="fixed-add-material"
+          class="neon-fixed-add"
+          phx-click="material-new"
+        >
+          افزودن
+        </button>
+
+        <button
+          :if={@active_tab == :products and not @product_modal_open}
+          type="button"
+          id="fixed-add-product"
+          class="neon-fixed-add"
+          phx-click="product-new"
+        >
+          افزودن
+        </button>
       </div>
     </Layouts.app>
     """
@@ -786,17 +874,23 @@ defmodule WindotProductsWeb.ProductManagementLive do
   end
 
   defp product_total(product, materials_by_id) do
-    Enum.reduce(product.items, 0, fn item, acc ->
-      case Map.get(materials_by_id, item.material_id) do
-        nil -> acc
-        material -> acc + material.price * item.quantity
-      end
-    end)
+    materials_total =
+      Enum.reduce(product.items, 0, fn item, acc ->
+        case Map.get(materials_by_id, item.material_id) do
+          nil -> acc
+          material -> acc + material.price * item.quantity
+        end
+      end)
+
+    materials_total + product_profit(product)
   end
 
-  defp price_toman(amount) when is_integer(amount) do
+  defp product_profit(product), do: product.profit || 0
+
+  defp price_toman(amount) when is_number(amount) do
     formatted =
       amount
+      |> round()
       |> Integer.to_string()
       |> String.reverse()
       |> String.replace(~r/(.{3})(?=.)/, "\\1,")
@@ -816,30 +910,61 @@ defmodule WindotProductsWeb.ProductManagementLive do
     end
   end
 
+  defp parse_quantity(nil), do: nil
+
+  defp parse_quantity(value) when is_integer(value), do: value * 1.0
+
+  defp parse_quantity(value) when is_float(value), do: value
+
+  defp parse_quantity(value) when is_binary(value) do
+    case Float.parse(value) do
+      {float, ""} -> float
+      _ -> nil
+    end
+  end
+
   defp parse_direction("up"), do: :up
   defp parse_direction("down"), do: :down
   defp parse_direction(_direction), do: nil
 
   defp refresh_materials(socket) do
     materials = Catalog.list_materials()
+    visible_materials = filter_by_name(materials, socket.assigns[:material_search])
 
     socket
     |> assign(:materials_list, materials)
     |> assign(:materials_by_id, materials_by_id(materials))
-    |> stream(:materials, materials, reset: true)
+    |> stream(:materials, visible_materials, reset: true)
   end
 
   defp refresh_products(socket) do
     products = Catalog.list_products()
+    visible_products = filter_by_name(products, socket.assigns[:product_search])
 
     socket
     |> assign(:products_count, length(products))
-    |> stream(:products, products, reset: true)
+    |> stream(:products, visible_products, reset: true)
+  end
+
+  defp filter_by_name(records, query) do
+    query = query |> to_string() |> String.trim() |> String.downcase()
+
+    if query == "" do
+      records
+    else
+      Enum.filter(records, fn record ->
+        record.name
+        |> to_string()
+        |> String.downcase()
+        |> String.contains?(query)
+      end)
+    end
   end
 
   defp reset_material_form(socket) do
     socket
     |> assign(:editing_material_id, nil)
+    |> assign(:material_modal_open, false)
     |> assign(:material_form, material_form(%{}))
     |> assign(:material_errors, %{})
   end
@@ -847,8 +972,9 @@ defmodule WindotProductsWeb.ProductManagementLive do
   defp reset_product_form(socket) do
     socket
     |> assign(:editing_product_id, nil)
+    |> assign(:product_modal_open, false)
     |> assign(:product_items, [])
-    |> assign(:product_form, product_form(%{}))
+    |> assign(:product_form, product_form(%{profit: 0}))
     |> assign(:item_form, item_form(%{}))
     |> assign(:product_errors, [])
   end

@@ -210,6 +210,9 @@
 }
 
 .app-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   border: 1px solid rgba(183, 255, 59, 0.5);
   padding: 0.4rem 1rem;
   border-radius: 999px;
@@ -233,18 +236,18 @@
 .neon-card {
   background: var(--neon-panel);
   border: 1px solid var(--neon-border);
-  border-radius: 1.25rem;
-  padding: 1.75rem;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+  border-radius: 0.85rem;
+  padding: 0.85rem;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(24px);
 }
 
 .neon-row {
   display: grid;
-  gap: 1.5rem;
+  gap: 0.6rem;
   align-items: center;
-  padding: 1rem 1.25rem;
-  border-radius: 1rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 0.65rem;
   border: 1px solid rgba(79, 240, 255, 0.15);
   background: rgba(8, 15, 28, 0.7);
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -259,8 +262,8 @@
 }
 
 .neon-index {
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 1.65rem;
+  height: 1.65rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -269,6 +272,7 @@
   color: rgba(183, 255, 59, 0.95);
   background: rgba(183, 255, 59, 0.1);
   font-weight: 700;
+  font-size: 0.8rem;
   box-shadow: 0 0 18px rgba(183, 255, 59, 0.14);
 }
 
@@ -280,9 +284,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-  border-radius: 0.85rem;
+  gap: 0.55rem;
+  padding: 0.42rem 0.6rem;
+  border-radius: 0.55rem;
   border: 1px solid rgba(183, 255, 59, 0.15);
   background: rgba(5, 10, 18, 0.6);
 }
@@ -290,9 +294,9 @@
 .neon-check {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
-  padding: 0.85rem 1rem;
-  border-radius: 0.85rem;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 0.55rem;
   border: 1px solid rgba(79, 240, 255, 0.18);
   background: rgba(5, 10, 18, 0.55);
   cursor: pointer;
@@ -313,8 +317,8 @@
 
 .neon-empty {
   border: 1px dashed rgba(79, 240, 255, 0.25);
-  border-radius: 0.85rem;
-  padding: 0.85rem 1rem;
+  border-radius: 0.55rem;
+  padding: 0.5rem 0.65rem;
   color: rgba(79, 240, 255, 0.72);
   background: rgba(5, 10, 18, 0.35);
   font-size: 0.85rem;
@@ -353,9 +357,9 @@
 
 .neon-input {
   width: 100%;
-  border-radius: 0.9rem;
+  border-radius: 0.6rem;
   border: 1px solid rgba(79, 240, 255, 0.3);
-  padding: 0.75rem 1rem;
+  padding: 0.48rem 0.65rem;
   background: rgba(6, 12, 22, 0.8);
   color: var(--neon-text);
   outline: none;
@@ -373,12 +377,73 @@
 
 .neon-btn {
   border-radius: 999px;
-  padding: 0.65rem 1.4rem;
+  padding: 0.42rem 0.8rem;
   font-weight: 600;
   background: linear-gradient(120deg, rgba(183, 255, 59, 0.95), rgba(79, 240, 255, 0.9));
   color: #08121c;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   box-shadow: 0 12px 30px rgba(79, 240, 255, 0.25);
+}
+
+.neon-row-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  justify-self: end;
+  min-width: max-content;
+}
+
+.neon-row-actions-group {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.neon-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(2, 6, 14, 0.72);
+  backdrop-filter: blur(12px);
+}
+
+.neon-modal-panel {
+  width: min(100%, 34rem);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  border: 1px solid var(--neon-border);
+  border-radius: 0.9rem;
+  padding: 1rem;
+  background: rgba(8, 15, 28, 0.95);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+}
+
+.neon-fixed-add {
+  position: fixed;
+  left: 50%;
+  bottom: 1.25rem;
+  z-index: 30;
+  width: 50%;
+  border-radius: 999px;
+  padding: 0.75rem 1.35rem;
+  font-weight: 700;
+  color: #08121c;
+  background: linear-gradient(120deg, rgba(183, 255, 59, 0.98), rgba(79, 240, 255, 0.95));
+  box-shadow: 0 16px 40px rgba(79, 240, 255, 0.35);
+  transform: translateX(-50%);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.neon-fixed-add:hover {
+  transform: translateX(-50%) translateY(-2px);
+  box-shadow: 0 20px 48px rgba(183, 255, 59, 0.35);
 }
 
 .neon-btn:hover {
