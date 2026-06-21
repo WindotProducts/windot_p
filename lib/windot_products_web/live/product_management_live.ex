@@ -376,7 +376,7 @@ defmodule WindotProductsWeb.ProductManagementLive do
                 name="search[q]"
                 value={@material_search}
                 label="جستجو بر اساس نام متریال"
-                class="neon-input"
+                class="neon-input @apply w-10"
                 phx-debounce="250"
               />
             </.form>
@@ -390,19 +390,16 @@ defmodule WindotProductsWeb.ProductManagementLive do
                 <div class="neon-index" aria-hidden="true"></div>
 
                 <div class="space-y-1">
-                  <p class="text-sm text-emerald-200/70">نام متریال</p>
-
-                  <p class="text-base font-semibold text-slate-50">{material.name}</p>
+                                   <p class="text-base font-semibold text-slate-50">{material.name}</p>
                 </div>
 
                 <div class="space-y-1">
-                  <p class="text-sm text-emerald-200/70">واحد شمارش</p>
-
+                 
                   <p class="text-base text-emerald-50">{material.unit}</p>
                 </div>
 
                 <div class="space-y-1">
-                  <p class="text-sm text-emerald-200/70">قیمت</p>
+                 
 
                   <p class="text-base font-semibold text-lime-200">{price_toman(material.price)}</p>
                 </div>
@@ -542,21 +539,17 @@ defmodule WindotProductsWeb.ProductManagementLive do
                 <div class="neon-index" aria-hidden="true"></div>
 
                 <div class="space-y-1">
-                  <p class="text-sm text-emerald-200/70">نام محصول</p>
-
+                  
                   <p class="text-base font-semibold text-slate-50">{product.name}</p>
                 </div>
 
                 <div class="space-y-1">
-                  <p class="text-sm text-emerald-200/70">سود</p>
 
                   <p class="text-base text-emerald-50">{price_toman(product_profit(product))}</p>
                 </div>
 
                 <div class="space-y-1">
-                  <p class="text-sm text-emerald-200/70">قیمت کل</p>
-
-                  <p class="text-base font-semibold text-lime-200">
+                                  <p class="text-base font-semibold text-lime-200">
                     {price_toman(product_total(product, @materials_by_id))}
                   </p>
                 </div>
@@ -673,7 +666,8 @@ defmodule WindotProductsWeb.ProductManagementLive do
                     phx-submit="item-add"
                     class="space-y-2.5"
                   >
-                    <div class="neon-material-picker-grid">
+                  <div class="overflow-x-scroll w-[99%]">
+                    <div class="flex overflow-x-scroll">
                       <label
                         :for={
                           material <-
@@ -715,6 +709,7 @@ defmodule WindotProductsWeb.ProductManagementLive do
                       >
                         متریالی برای نمایش وجود ندارد.
                       </div>
+                    </div>
                     </div>
 
                     <button type="submit" class="neon-btn w-full">
