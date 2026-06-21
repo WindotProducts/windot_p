@@ -18,6 +18,7 @@ defmodule WindotProductsWeb.ProductManagementLive do
       |> assign(:product_modal_open, false)
       |> assign(:material_search, "")
       |> assign(:product_search, "")
+      |> assign(:product_material_search, "")
       |> assign(:material_errors, %{})
       |> assign(:product_errors, [])
       |> assign(:product_items, [])
@@ -57,6 +58,10 @@ defmodule WindotProductsWeb.ProductManagementLive do
      socket
      |> assign(:product_search, query)
      |> refresh_products()}
+  end
+
+  def handle_event("product-material-search", %{"search" => %{"q" => query}}, socket) do
+    {:noreply, assign(socket, :product_material_search, query)}
   end
 
   def handle_event("material-new", _params, socket) do
@@ -334,7 +339,7 @@ defmodule WindotProductsWeb.ProductManagementLive do
       </:header_badge>
 
       <div class="space-y-4">
-        <div class="flex flex-wrap gap-3">
+        <div class="neon-fixed-tabs">
           <button
             type="button"
             class={tab_class(@active_tab == :materials)}
@@ -352,6 +357,7 @@ defmodule WindotProductsWeb.ProductManagementLive do
             محصولات
           </button>
         </div>
+        <div class="h-12" aria-hidden="true" />
 
         <div :if={@active_tab == :materials} class="grid gap-3">
           <section class="neon-card space-y-3">
@@ -618,11 +624,11 @@ defmodule WindotProductsWeb.ProductManagementLive do
                   انصراف
                 </button>
               </div>
-              <div class="mt-3 space-y-2.5">
+              <div class="neon-product-editor-grid mt-3">
                 <.form
                   for={@product_form}
                   id="product-form"
-                  class="space-y-2.5"
+                  class="neon-product-main-form"
                   phx-change="product-validate"
                   phx-submit="product-save"
                 >
@@ -642,9 +648,24 @@ defmodule WindotProductsWeb.ProductManagementLive do
                     min="0"
                   />
                 </.form>
-                <div class="neon-divider" />
-                <div class="space-y-2">
+
+                <div class="neon-product-picker">
                   <p class="text-sm font-semibold text-emerald-100">افزودن متریال به محصول</p>
+
+                  <.form
+                    for={to_form(%{"q" => @product_material_search}, as: "search")}
+                    id="product-material-search-form"
+                    phx-change="product-material-search"
+                  >
+                    <.input
+                      type="search"
+                      name="search[q]"
+                      value={@product_material_search}
+                      label="جستجو بین متریال ها"
+                      class="neon-input"
+                      phx-debounce="250"
+                    />
+                  </.form>
 
                   <.form
                     for={@item_form}
@@ -652,9 +673,16 @@ defmodule WindotProductsWeb.ProductManagementLive do
                     phx-submit="item-add"
                     class="space-y-2.5"
                   >
-                    <div class="grid gap-2 sm:grid-cols-2">
+                    <div class="neon-material-picker-grid">
                       <label
-                        :for={material <- available_materials(@materials_list, @product_items)}
+                        :for={
+                          material <-
+                            available_materials(
+                              @materials_list,
+                              @product_items,
+                              @product_material_search
+                            )
+                        }
                         for={"material-option-#{material.id}"}
                         class="neon-check"
                       >
@@ -676,10 +704,16 @@ defmodule WindotProductsWeb.ProductManagementLive do
                       </label>
 
                       <div
-                        :if={available_materials(@materials_list, @product_items) == []}
+                        :if={
+                          available_materials(
+                            @materials_list,
+                            @product_items,
+                            @product_material_search
+                          ) == []
+                        }
                         class="neon-empty"
                       >
-                        همه متریال ها به لیست محصول اضافه شده اند.
+                        متریالی برای نمایش وجود ندارد.
                       </div>
                     </div>
 
@@ -695,7 +729,7 @@ defmodule WindotProductsWeb.ProductManagementLive do
                   <% end %>
                 </div>
 
-                <div class="space-y-2">
+                <div class="neon-product-selected">
                   <p class="text-sm font-semibold text-emerald-100">متریال های انتخاب شده</p>
 
                   <.form
@@ -703,9 +737,9 @@ defmodule WindotProductsWeb.ProductManagementLive do
                     for={to_form(%{}, as: "quantities")}
                     id="item-quantities-form"
                     phx-change="item-quantities-change"
-                    class="space-y-2"
+                    class="neon-selected-materials"
                   >
-                    <div :for={item <- @product_items} class="neon-subrow">
+                    <div :for={item <- @product_items} class="neon-selected-material">
                       <div class="min-w-0">
                         <p class="text-sm font-semibold text-emerald-100">
                           {material_name(item.material_id, @materials_by_id)}
@@ -716,7 +750,7 @@ defmodule WindotProductsWeb.ProductManagementLive do
                         </p>
                       </div>
 
-                      <div class="flex w-full items-end gap-3 sm:w-auto">
+                      <div class="neon-selected-material-controls">
                         <.input
                           type="number"
                           id={"item-quantity-#{item.material_id}"}
@@ -731,7 +765,7 @@ defmodule WindotProductsWeb.ProductManagementLive do
 
                         <button
                           type="button"
-                          class="neon-link pb-3"
+                          class="neon-link"
                           phx-click="item-remove"
                           phx-value-material_id={item.material_id}
                         >
@@ -746,7 +780,7 @@ defmodule WindotProductsWeb.ProductManagementLive do
                   </div>
                 </div>
 
-                <button type="submit" form="product-form" class="neon-btn w-full">
+                <button type="submit" form="product-form" class="neon-btn neon-product-submit">
                   {if @editing_product_id, do: "ذخیره تغییرات محصول", else: "ثبت محصول"}
                 </button>
               </div>
@@ -843,9 +877,12 @@ defmodule WindotProductsWeb.ProductManagementLive do
 
   defp normalize_form_values(map), do: map
 
-  defp available_materials(materials, items) do
+  defp available_materials(materials, items, query) do
     selected_ids = MapSet.new(items, & &1.material_id)
-    Enum.reject(materials, &MapSet.member?(selected_ids, &1.id))
+
+    materials
+    |> Enum.reject(&MapSet.member?(selected_ids, &1.id))
+    |> filter_by_name(query)
   end
 
   defp add_items(items, material_ids) do
@@ -973,6 +1010,7 @@ defmodule WindotProductsWeb.ProductManagementLive do
     socket
     |> assign(:editing_product_id, nil)
     |> assign(:product_modal_open, false)
+    |> assign(:product_material_search, "")
     |> assign(:product_items, [])
     |> assign(:product_form, product_form(%{profit: 0}))
     |> assign(:item_form, item_form(%{}))
