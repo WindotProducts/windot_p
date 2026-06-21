@@ -447,12 +447,15 @@
 
 .neon-product-editor-grid {
   display: grid;
-  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  direction: rtl;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0.85rem;
   align-items: start;
 }
 
 .neon-product-main-form {
+  grid-column: 1;
+  grid-row: 1;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.65rem;
@@ -470,7 +473,23 @@
 }
 
 .neon-product-picker {
-  grid-row: span 3;
+  grid-column: 2;
+  grid-row: 1 / span 4;
+}
+
+.neon-product-editor-grid > .neon-alert {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.neon-product-selected {
+  grid-column: 1;
+  grid-row: 3;
+}
+
+.neon-item-picker-form {
+  display: grid;
+  gap: 0.65rem;
 }
 
 .neon-material-picker-grid {
@@ -512,17 +531,28 @@
 }
 
 .neon-product-submit {
-  grid-column: 1 / -1;
+  grid-column: 1;
+  grid-row: 4;
   width: 100%;
 }
 
 @media (max-width: 760px) {
   .neon-product-editor-grid,
   .neon-product-main-form {
+    direction: inherit;
     grid-template-columns: 1fr;
   }
 
+  .neon-product-main-form,
   .neon-product-picker {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .neon-product-editor-grid > .neon-alert,
+  .neon-product-selected,
+  .neon-product-submit {
+    grid-column: auto;
     grid-row: auto;
   }
 

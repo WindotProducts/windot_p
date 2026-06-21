@@ -390,17 +390,14 @@ defmodule WindotProductsWeb.ProductManagementLive do
                 <div class="neon-index" aria-hidden="true"></div>
 
                 <div class="space-y-1">
-                                   <p class="text-base font-semibold text-slate-50">{material.name}</p>
+                  <p class="text-base font-semibold text-slate-50">{material.name}</p>
                 </div>
 
                 <div class="space-y-1">
-                 
                   <p class="text-base text-emerald-50">{material.unit}</p>
                 </div>
 
                 <div class="space-y-1">
-                 
-
                   <p class="text-base font-semibold text-lime-200">{price_toman(material.price)}</p>
                 </div>
 
@@ -539,17 +536,15 @@ defmodule WindotProductsWeb.ProductManagementLive do
                 <div class="neon-index" aria-hidden="true"></div>
 
                 <div class="space-y-1">
-                  
                   <p class="text-base font-semibold text-slate-50">{product.name}</p>
                 </div>
 
                 <div class="space-y-1">
-
                   <p class="text-base text-emerald-50">{price_toman(product_profit(product))}</p>
                 </div>
 
                 <div class="space-y-1">
-                                  <p class="text-base font-semibold text-lime-200">
+                  <p class="text-base font-semibold text-lime-200">
                     {price_toman(product_total(product, @materials_by_id))}
                   </p>
                 </div>
@@ -649,7 +644,6 @@ defmodule WindotProductsWeb.ProductManagementLive do
                     for={to_form(%{"q" => @product_material_search}, as: "search")}
                     id="product-material-search-form"
                     phx-change="product-material-search"
-                    class="w-[400px]"
                   >
                     <.input
                       type="search"
@@ -665,10 +659,9 @@ defmodule WindotProductsWeb.ProductManagementLive do
                     for={@item_form}
                     id="item-form"
                     phx-submit="item-add"
-                    class="space-y-2.5 w-[400px]"
+                    class="neon-item-picker-form"
                   >
-                  <div class="overflow-x-scroll w-[99%]">
-                    <div class="flex gap-3">
+                    <div class="neon-material-picker-grid">
                       <label
                         :for={
                           material <-
@@ -710,7 +703,6 @@ defmodule WindotProductsWeb.ProductManagementLive do
                       >
                         متریالی برای نمایش وجود ندارد.
                       </div>
-                    </div>
                     </div>
 
                     <button type="submit" class="neon-btn w-full">
@@ -776,7 +768,7 @@ defmodule WindotProductsWeb.ProductManagementLive do
                   </div>
                 </div>
 
-                <button type="submit" form="product-form" class="neon-btn neon-product-submit w-[100px]">
+                <button type="submit" form="product-form" class="neon-btn neon-product-submit">
                   {if @editing_product_id, do: "ذخیره تغییرات محصول", else: "ثبت محصول"}
                 </button>
               </div>
