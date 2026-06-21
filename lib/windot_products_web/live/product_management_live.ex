@@ -649,6 +649,7 @@ defmodule WindotProductsWeb.ProductManagementLive do
                     for={to_form(%{"q" => @product_material_search}, as: "search")}
                     id="product-material-search-form"
                     phx-change="product-material-search"
+                    class="w-[400px]"
                   >
                     <.input
                       type="search"
@@ -664,10 +665,10 @@ defmodule WindotProductsWeb.ProductManagementLive do
                     for={@item_form}
                     id="item-form"
                     phx-submit="item-add"
-                    class="space-y-2.5"
+                    class="space-y-2.5 w-[400px]"
                   >
                   <div class="overflow-x-scroll w-[99%]">
-                    <div class="flex overflow-x-scroll">
+                    <div class="flex gap-3">
                       <label
                         :for={
                           material <-
@@ -775,7 +776,7 @@ defmodule WindotProductsWeb.ProductManagementLive do
                   </div>
                 </div>
 
-                <button type="submit" form="product-form" class="neon-btn neon-product-submit">
+                <button type="submit" form="product-form" class="neon-btn neon-product-submit w-[100px]">
                   {if @editing_product_id, do: "ذخیره تغییرات محصول", else: "ثبت محصول"}
                 </button>
               </div>
