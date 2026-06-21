@@ -540,7 +540,9 @@ defmodule WindotProductsWeb.ProductManagementLive do
                 </div>
 
                 <div class="space-y-1">
-                  <p class="text-base text-emerald-50">{price_toman(product_profit(product))}</p>
+                  <p class="text-base text-emerald-50">
+                    {price_toman(product_materials_total(product, @materials_by_id))}
+                  </p>
                 </div>
 
                 <div class="space-y-1">
@@ -899,15 +901,16 @@ defmodule WindotProductsWeb.ProductManagementLive do
   end
 
   defp product_total(product, materials_by_id) do
-    materials_total =
-      Enum.reduce(product.items, 0, fn item, acc ->
-        case Map.get(materials_by_id, item.material_id) do
-          nil -> acc
-          material -> acc + material.price * item.quantity
-        end
-      end)
+    product_materials_total(product, materials_by_id) + product_profit(product)
+  end
 
-    materials_total + product_profit(product)
+  defp product_materials_total(product, materials_by_id) do
+    Enum.reduce(product.items, 0, fn item, acc ->
+      case Map.get(materials_by_id, item.material_id) do
+        nil -> acc
+        material -> acc + material.price * item.quantity
+      end
+    end)
   end
 
   defp product_profit(product), do: product.profit || 0
